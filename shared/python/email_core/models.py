@@ -80,3 +80,12 @@ class CreateNotificationRequest(BaseModel):
     body: str
     related_email_id: Optional[str] = None
 
+
+class OAuthTokenPayload(BaseModel):
+    user_id: str
+    provider: str = "microsoft365"
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_type: Optional[str] = None
+    scope: Optional[str] = None
+    expires_in: Optional[int] = None

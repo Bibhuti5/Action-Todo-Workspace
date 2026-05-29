@@ -2,16 +2,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    service_name: str = "gateway"
-    summarizer_url: str = "http://summarizer:8030"
-    notifier_url: str = "http://notifier:8040"
-    ingestion_url: str = "http://ingestion:8020"
-    auth_url: str = "http://auth:8050"
+    service_name: str = "auth"
     app_timezone: str = "Asia/Kolkata"
-    timeout_seconds: float = 10.0
 
     ms_tenant_id: str = "common"
     ms_client_id: str = ""
+    ms_client_secret: str = ""
     ms_redirect_uri: str = "http://localhost:8000/api/mail/oauth/callback"
     ms_graph_scope: str = "Mail.Read User.Read offline_access"
 
@@ -23,3 +19,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

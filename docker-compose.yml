@@ -11,13 +11,19 @@ services:
       SUMMARIZER_URL: ${SUMMARIZER_URL:-http://summarizer:8030}
       NOTIFIER_URL: ${NOTIFIER_URL:-http://notifier:8040}
       INGESTION_URL: ${INGESTION_URL:-http://ingestion:8020}
+      AUTH_URL: ${AUTH_URL:-http://auth:8050}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kolkata}
+      MS_TENANT_ID: ${MS_TENANT_ID:-common}
+      MS_CLIENT_ID: ${MS_CLIENT_ID:-}
+      MS_REDIRECT_URI: ${MS_REDIRECT_URI:-http://localhost:8000/api/mail/oauth/callback}
+      MS_GRAPH_SCOPE: ${MS_GRAPH_SCOPE:-Mail.Read User.Read offline_access}
     ports:
       - "8000:8000"
     depends_on:
       - summarizer
       - notifier
       - ingestion
+      - auth
 
   scheduler:
     build:
@@ -28,10 +34,30 @@ services:
     environment:
       GATEWAY_URL: ${GATEWAY_URL:-http://gateway:8000}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kolkata}
+      SCAN_USER_ID: ${SCAN_USER_ID:-demo-user}
     ports:
       - "8010:8010"
     depends_on:
       - gateway
+
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    env_file:
+      - .env
+    environment:
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kolkata}
+      MS_TENANT_ID: ${MS_TENANT_ID:-common}
+      MS_CLIENT_ID: ${MS_CLIENT_ID:-}
+      MS_CLIENT_SECRET: ${MS_CLIENT_SECRET:-}
+      MS_REDIRECT_URI: ${MS_REDIRECT_URI:-http://localhost:8000/api/mail/oauth/callback}
+      MS_GRAPH_SCOPE: ${MS_GRAPH_SCOPE:-Mail.Read User.Read offline_access}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/email_summary.db}
+    ports:
+      - "8050:8050"
+    volumes:
+      - app_data:/data
 
   ingestion:
     build:
@@ -42,9 +68,15 @@ services:
     environment:
       SUMMARIZER_URL: ${SUMMARIZER_URL:-http://summarizer:8030}
       NOTIFIER_URL: ${NOTIFIER_URL:-http://notifier:8040}
+      AUTH_URL: ${AUTH_URL:-http://auth:8050}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kolkata}
+      ALLOW_SAMPLE_MAIL: ${ALLOW_SAMPLE_MAIL:-false}
     ports:
       - "8020:8020"
+    depends_on:
+      - auth
+      - summarizer
+      - notifier
 
   summarizer:
     build:
@@ -54,8 +86,11 @@ services:
       - .env
     environment:
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kolkata}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/email_summary.db}
     ports:
       - "8030:8030"
+    volumes:
+      - app_data:/data
 
   notifier:
     build:
@@ -65,6 +100,11 @@ services:
       - .env
     environment:
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Kolkata}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/email_summary.db}
     ports:
       - "8040:8040"
+    volumes:
+      - app_data:/data
 
+volumes:
+  app_data:

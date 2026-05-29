@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime
+import logging
+import asyncio
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -12,6 +14,7 @@ from email_core.models import ScanRequest
 from app.settings import settings
 
 scheduler = AsyncIOScheduler(timezone=settings.app_timezone)
+logger = logging.getLogger(__name__)
 
 
 async def trigger_scan(source: str) -> None:
@@ -21,8 +24,25 @@ async def trigger_scan(source: str) -> None:
         scheduled_for=datetime.now(tz=ZoneInfo(settings.app_timezone)),
     ).model_dump(mode="json")
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        await client.post(f"{settings.gateway_url}/api/scans/run-now", json=payload)
+    headers = {"X-User-Id": settings.scan_user_id}
+    delays = (1, 2, 4)
+    last_error: Exception | None = None
+    for delay in delays:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.post(
+                    f"{settings.gateway_url}/api/scans/run-now",
+                    json=payload,
+                    headers=headers,
+                )
+                response.raise_for_status()
+                return
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            logger.exception("scheduler_trigger_failed source=%s retry_in=%s", source, delay)
+            await asyncio.sleep(delay)
+    if last_error:
+        raise last_error
 
 
 @asynccontextmanager
@@ -53,4 +73,3 @@ async def health() -> dict:
         "timezone": settings.app_timezone,
         "jobs": ["11:00", "17:00"],
     }
-

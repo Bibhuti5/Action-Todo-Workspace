@@ -17,8 +17,9 @@ class MicrosoftGraphMailClient:
         self,
         delegated_access_token: str | None = None,
         limit: int = 20,
+        allow_sample_fallback: bool = False,
     ) -> List[EmailMessage]:
-        if not delegated_access_token:
+        if not delegated_access_token and allow_sample_fallback:
             now = datetime.now(timezone.utc)
             return [
                 EmailMessage(
@@ -43,6 +44,8 @@ class MicrosoftGraphMailClient:
                     received_at=now - timedelta(hours=3),
                 ),
             ]
+        if not delegated_access_token:
+            raise ValueError("No Microsoft delegated access token found for user")
 
         headers = {"Authorization": f"Bearer {delegated_access_token}"}
         params = {
@@ -79,4 +82,3 @@ class MicrosoftGraphMailClient:
                 )
             )
         return messages
-

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from email_core.logging import configure_logging
 from email_core.models import CreateNotificationRequest, DailySummary, ScanRequest, ScanResult
@@ -12,6 +12,21 @@ from app.graph_client import MicrosoftGraphMailClient
 from app.settings import settings
 
 graph_client = MicrosoftGraphMailClient()
+
+
+async def fetch_user_access_token(client: httpx.AsyncClient, user_id: str) -> str:
+    response = await client.get(f"{settings.auth_url}/internal/tokens/{user_id}")
+    if response.status_code == 404:
+        raise HTTPException(
+            status_code=412,
+            detail="mail_not_connected: connect Microsoft 365 account first",
+        )
+    response.raise_for_status()
+    payload = response.json()
+    access_token = payload.get("access_token", "")
+    if not access_token:
+        raise HTTPException(status_code=500, detail="missing_access_token")
+    return access_token
 
 
 @asynccontextmanager
@@ -29,7 +44,12 @@ app = FastAPI(title="email-summary-ingestion", version="0.1.0", lifespan=lifespa
 async def run_scan(scan_request: ScanRequest) -> dict:
     client: httpx.AsyncClient = app.state.http_client  # type: ignore[attr-defined]
     scan_run_id = str(uuid4())
-    messages = await graph_client.fetch_recent_messages(limit=25)
+    access_token = await fetch_user_access_token(client, scan_request.user_id)
+    messages = await graph_client.fetch_recent_messages(
+        delegated_access_token=access_token,
+        limit=25,
+        allow_sample_fallback=settings.allow_sample_mail,
+    )
 
     scan_result = ScanResult(
         user_id=scan_request.user_id,
@@ -52,10 +72,11 @@ async def run_scan(scan_request: ScanRequest) -> dict:
             body="Open dashboard action table to review priority items.",
             related_email_id=summary.actions[0].email_id if summary.actions else None,
         )
-        await client.post(
+        notification_response = await client.post(
             f"{settings.notifier_url}/internal/notifications",
             json=note.model_dump(mode="json"),
         )
+        notification_response.raise_for_status()
 
     return {
         "status": "completed",
@@ -68,4 +89,3 @@ async def run_scan(scan_request: ScanRequest) -> dict:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "service": settings.service_name}
-

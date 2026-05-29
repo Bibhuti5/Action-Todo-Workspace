@@ -11,7 +11,7 @@ This is the first simple version, designed so we can add more features later.
 ## 2) MVP Scope
 
 ### In Scope (V1)
-- Connect one mailbox provider first (recommended: Gmail or Microsoft 365).
+- Connect one mailbox provider first (Microsoft 365 via Graph API).
 - Scheduled mail scan at fixed times (11:00 AM, 5:00 PM in user timezone).
 - AI summary for new/unread/recent emails since last scan.
 - Action detection and priority tagging:
@@ -51,6 +51,17 @@ flowchart LR
   INGEST --> SEC["Secrets Manager"]
   AUTH --> SEC
 ```
+
+### Current Implementation Status (May 2026)
+- Implemented now:
+  - Python microservices (`gateway`, `scheduler`, `auth`, `ingestion`, `summarizer`, `notifier`)
+  - Microsoft OAuth code exchange and token storage
+  - User-scoped APIs with identity header (`X-User-Id`) for MVP
+  - Persistent summary/actions/notifications storage
+- Next to implement:
+  - SQS/EventBridge-based async orchestration (currently direct service calls)
+  - Full JWT auth/RBAC
+  - Service-owned Postgres schemas on RDS
 
 ## 4) Services (Microservice Boundaries)
 
@@ -107,7 +118,8 @@ flowchart LR
 - `GET /api/notifications?status=unread`
 - `POST /api/notifications/{id}/read`
 - `GET /api/actions?status=open&priority=high`
-- `POST /api/mail/connect/{provider}`
+- `GET /api/mail/connect/microsoft365`
+- `GET /api/mail/oauth/callback`
 - `POST /api/scans/run-now` (manual trigger)
 
 ## 7) Scheduling Design
@@ -159,7 +171,7 @@ flowchart LR
 ## 10) Suggested Tech Stack
 
 - **Frontend**: React + Next.js + Tailwind + component library
-- **Gateway/BFF**: Node.js (NestJS) or Python (FastAPI)
+- **Gateway/BFF**: Python (FastAPI)
 - **Workers**: Python (good for email parsing + LLM orchestration)
 - **DB**: PostgreSQL
 - **Queue**: RabbitMQ / AWS SQS
